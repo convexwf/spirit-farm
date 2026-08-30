@@ -14,8 +14,9 @@
 ## 目录结构
 
 ```text
-assets/             素材（sprites / tilesets / audio）
+assets/             素材（sprites / tilesets / audio / 视觉规范）
 docs/design.md      核心设定文档（项目的"宪法"，改动先改这里）
+docs/roadmap.md     开发路线图（待办清单，按主题分栏）
 scenes/             场景
 scripts/
   autoload/         全局单例（GameState、EventBus）

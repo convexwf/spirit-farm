@@ -1,7 +1,7 @@
 extends Node
 
 ## 全局事件总线：模块之间只通过这里的信号通信，互不直接引用。
-## 这些信号对应 docs/design.md 的 7.2 节，先定好，避免后续重构。
+## 这些信号对应 docs/design.md 的 9.2 节，先定好，避免后续重构。
 
 # 作物
 signal crop_planted(crop_id: String, tile: Vector2i)

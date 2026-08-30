@@ -12,6 +12,8 @@ const MINUTES_PER_DAY := 24 * 60
 var day := 1
 var season := 0          # 0=春 1=夏 2=秋 3=冬
 var minute_of_day := 600 # 早上 10:00
+var money := 0
+var harvests := 0
 
 var season_name: String:
 	get:
