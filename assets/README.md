@@ -69,14 +69,14 @@ Kenney 的 `tilemap.png` 瓦片间距为 1px（见各包 `Tilesheet.txt`）。
 
 | 文件 | 用途 | 来源 |
 | --- | --- | --- |
-| `player_placeholder.png` | 玩家占位（16×16） | 代码生成 |
-| `crops/crop_stage_0~4.png` | 作物生长 5 阶段 | 代码生成 |
+| `player_placeholder.png` | 旧版玩家占位（保留作回退素材） | 代码生成，运行时已改用 Tiny Farm 图块 |
+| `crops/crop_stage_0~4.png` | 旧版作物占位（保留作回退素材） | 代码生成，运行时已改用 Tiny Farm 64-68 |
 | `fx/watered.png` | 已浇水标记 | 代码生成 |
 
-这些占位图由 [tools/generate_placeholders.py](../tools/generate_placeholders.py)
-逐像素生成，原因：Kenney Tiny 各包只有单帧瓦片、没有玩家四方向行走动画；
-Tiny Farm 含作物素材但瓦片编号未逐一确认。先用占位图保证玩法可跑，
-重跑脚本可精确复现。正式素材的替换见 [roadmap.md](../docs/roadmap.md) 第 6 章。
+这些旧占位图由 [tools/generate_placeholders.py](../tools/generate_placeholders.py)
+逐像素生成，保留它们是为了在正式素材缺失时仍能快速回退。当前运行时已接入
+Tiny Farm 的玩家图块与作物 64-68；玩家完整四向行走帧仍按
+[roadmap.md](../docs/roadmap.md) 第 6 章继续补齐。
 
 确认瓦片编号时可打开 `_previews/tiny-farm_indexed.png`、
 `tiny-town_indexed.png`、`tiny-dungeon_indexed.png`（带编号索引图）对照。

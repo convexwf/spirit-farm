@@ -4,8 +4,7 @@ extends Node2D
 ## v0.1 农场地图：根据 ASCII 数据生成地面/细节两层 TileMap。
 ##
 ## 瓦片编号全部集中在这个文件里（Tiny Town / Tiny Farm 都是 12 列 x 11 行，
-## 编号 = 行 * 12 + 列）。瓦片编号是根据颜色分析初选的，
-## 如果某个图块显示不对，直接在 Godot 编辑器里打开素材图对照后改这里。
+## 编号 = 行 * 12 + 列）。编号已对照 assets/README.md 中的索引文档确认。
 
 signal notice(message: String)
 
@@ -25,14 +24,8 @@ const FLOWER := 29
 const FARM_SOURCE_ID := 1
 const SOIL := 49
 const SOIL_VARIANTS := [0, 1, 36, 37]
-
-const CROP_TEXTS := [
-	"res://assets/sprites/crops/crop_stage_0.png",
-	"res://assets/sprites/crops/crop_stage_1.png",
-	"res://assets/sprites/crops/crop_stage_2.png",
-	"res://assets/sprites/crops/crop_stage_3.png",
-	"res://assets/sprites/crops/crop_stage_4.png",
-]
+const SOIL_HORIZONTAL_LIGHT := [48, 49, 50, 51]
+const FARM_CROP_TILES := [64, 65, 66, 67, 68]
 const WATERED_TEX := "res://assets/sprites/fx/watered.png"
 const CROP_MATURE_STAGE := 4
 
@@ -70,6 +63,7 @@ var _ground_layer: TileMapLayer
 var _visual_layer: WorldVisuals
 var _detail_layer: TileMapLayer
 var _water_tiles: Array[Vector2i] = []
+var _crop_textures: Array[AtlasTexture] = []
 
 
 func _ready() -> void:
@@ -88,7 +82,12 @@ func _ready() -> void:
 
 	_ground_layer.tile_set = _build_ground_tileset()
 	_detail_layer.tile_set = _build_detail_tileset()
+	for idx in FARM_CROP_TILES:
+		_crop_textures.append(_atlas_tile_texture(FARM_TEX, idx))
 	_build_map()
+	_add_landmarks()
+	_shape_pond()
+	_apply_terrain_edges()
 	_visual_layer.set_water_tiles(_water_tiles)
 
 	GameState.day_changed.connect(_on_day_changed)
@@ -104,6 +103,7 @@ func hoe(tile: Vector2i) -> void:
 	match ground.get(tile, ""):
 		"grass":
 			_set_tile(tile, SOIL_VARIANTS[randi() % SOIL_VARIANTS.size()], "soil", FARM_SOURCE_ID)
+			_refresh_terrain_around(tile)
 			notice.emit("锄地完成，可以播种了")
 		"soil", "watered":
 			notice.emit("这里已经开垦过了")
@@ -136,7 +136,7 @@ func plant(tile: Vector2i) -> void:
 		notice.emit("请先锄地再播种")
 		return
 	var sprite := Sprite2D.new()
-	sprite.texture = load(CROP_TEXTS[0])
+	sprite.texture = _crop_textures[0]
 	sprite.position = tile_center(tile) + Vector2(0, 6)
 	sprite.z_index = 2
 	add_child(sprite)
@@ -165,7 +165,7 @@ func _on_day_changed(_day: int, _season: int) -> void:
 		var crop: Dictionary = crops[tile]
 		if crop["stage"] < CROP_MATURE_STAGE:
 			crop["stage"] += 1
-			crop["sprite"].texture = load(CROP_TEXTS[crop["stage"]])
+			crop["sprite"].texture = _crop_textures[crop["stage"]]
 
 
 func tile_center(tile: Vector2i) -> Vector2:
@@ -193,6 +193,10 @@ func _build_detail_tileset() -> TileSet:
 	var src := _add_atlas_source(ts, TOWN_TEX, 0)
 	for t in TREES:
 		_block_tile(src, t)
+	for t in [44, 45, 46, 47, 56, 58, 59, 68, 69, 70, 71, 80, 81]:
+		_block_tile(src, t)
+	for t in [51, 52, 53, 54, 55, 63, 64, 65, 66, 67, 72, 73, 74, 75, 76, 77, 78, 79]:
+		_block_tile(src, t)
 	return ts
 
 
@@ -204,6 +208,13 @@ func _add_atlas_source(ts: TileSet, texture_path: String, source_id: int) -> Til
 		src.create_tile(Vector2i(i % 12, i / 12))
 	ts.add_source(src, source_id)
 	return src
+
+
+func _atlas_tile_texture(texture_path: String, idx: int) -> AtlasTexture:
+	var texture := AtlasTexture.new()
+	texture.atlas = load(texture_path)
+	texture.region = Rect2((idx % 12) * 16, (idx / 12) * 16, 16, 16)
+	return texture
 
 
 func _block_tile(src: TileSetAtlasSource, idx: int) -> void:
@@ -240,6 +251,97 @@ func _build_map() -> void:
 				"B":
 					_set_grass(tile)
 					_set_detail(tile, BUSH)
+
+
+func _add_landmarks() -> void:
+	# 小屋：使用 Tiny Town 的橙红墙体、门面，给地图一个明确的视觉锚点。
+	var house := {
+		Vector2i(20, 1): 64,
+		Vector2i(21, 1): 65,
+		Vector2i(22, 1): 66,
+		Vector2i(20, 2): 72,
+		Vector2i(21, 2): 73,
+		Vector2i(22, 2): 74,
+	}
+	for tile in house:
+		_set_detail(tile, house[tile])
+	_visual_layer.add_structure_shadow(Rect2(Vector2(20 * 16, 16), Vector2(48, 32)))
+
+	# 围住主要耕地，避免所有视觉重心都落在矩形边界上。
+	for x in range(6, 17):
+		_set_detail(Vector2i(x, 8), 45)
+	for y in range(5, 8):
+		_set_detail(Vector2i(5, y), 47)
+		_set_detail(Vector2i(17, y), 47)
+	_set_detail(Vector2i(5, 8), 44)
+	_set_detail(Vector2i(17, 8), 46)
+
+	# 从横向主路引出一条折线小路，打破测试场的轴对齐感。
+	for tile in [Vector2i(18, 4), Vector2i(18, 5), Vector2i(19, 5), Vector2i(19, 6), Vector2i(20, 6), Vector2i(20, 7)]:
+		_set_tile(tile, PATH_C, "path")
+
+	_set_detail(Vector2i(18, 2), 57)
+
+
+func _shape_pond() -> void:
+	# 去掉四个角，形成不规则池塘；水面本身由 WorldVisuals 绘制。
+	for tile in [Vector2i(7, 11), Vector2i(24, 11), Vector2i(7, 13), Vector2i(24, 13)]:
+		if ground.get(tile, "") == "water":
+			_water_tiles.erase(tile)
+			_set_grass(tile)
+
+
+func _apply_terrain_edges() -> void:
+	for tile in ground:
+		match ground[tile]:
+			"path":
+				_set_tile(tile, _path_tile_for(tile), "path")
+			"soil":
+				_set_tile(tile, _soil_tile_for(tile), "soil", FARM_SOURCE_ID)
+
+
+func _refresh_terrain_around(tile: Vector2i) -> void:
+	for candidate in [tile, tile + Vector2i.UP, tile + Vector2i.DOWN, tile + Vector2i.LEFT, tile + Vector2i.RIGHT]:
+		if ground.get(candidate, "") == "soil":
+			_set_tile(candidate, _soil_tile_for(candidate), "soil", FARM_SOURCE_ID)
+
+
+func _path_tile_for(tile: Vector2i) -> int:
+	var up: bool = ground.get(tile + Vector2i.UP, "") == "path"
+	var down: bool = ground.get(tile + Vector2i.DOWN, "") == "path"
+	var left: bool = ground.get(tile + Vector2i.LEFT, "") == "path"
+	var right: bool = ground.get(tile + Vector2i.RIGHT, "") == "path"
+	if up and down and left and right:
+		return 25
+	if not up and down and left and right:
+		return 13
+	if up and not down and left and right:
+		return 37
+	if up and down and not left and right:
+		return 24
+	if up and down and left and not right:
+		return 26
+	if not up and not left:
+		return 12
+	if not up and not right:
+		return 14
+	if not down and not left:
+		return 36
+	if not down and not right:
+		return 38
+	if not up and not down and left and right:
+		return 13 if ground.get(tile + Vector2i.UP, "") == "grass" else 37
+	return 25
+
+
+func _soil_tile_for(tile: Vector2i) -> int:
+	var left: bool = ground.get(tile + Vector2i.LEFT, "") == "soil"
+	var right: bool = ground.get(tile + Vector2i.RIGHT, "") == "soil"
+	if left and right:
+		return SOIL_HORIZONTAL_LIGHT[1]
+	if not left and not right:
+		return SOIL_HORIZONTAL_LIGHT[3]
+	return SOIL_HORIZONTAL_LIGHT[0] if not left else SOIL_HORIZONTAL_LIGHT[2]
 
 
 func _set_grass(tile: Vector2i) -> void:

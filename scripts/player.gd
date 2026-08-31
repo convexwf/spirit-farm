@@ -1,10 +1,15 @@
 extends CharacterBody2D
 
 const SPEED := 90.0
+const FARM_TEX := "res://assets/kenney/tiny-farm/Tilemap/tilemap_packed.png"
+const PLAYER_FRONT_TILE := 108
+const PLAYER_SIDE_TILE := 109
 
 var facing := Vector2i.DOWN
 var _walk_phase := 0.0
 var _sprite_base_position := Vector2.ZERO
+var _front_texture: AtlasTexture
+var _side_texture: AtlasTexture
 
 @onready var sprite: Sprite2D = $Sprite2D
 @onready var farm_map: FarmMap = get_node("../FarmMap")
@@ -23,6 +28,9 @@ const ACTIONS := {
 
 func _ready() -> void:
 	_sprite_base_position = sprite.position
+	_front_texture = _atlas_tile_texture(PLAYER_FRONT_TILE)
+	_side_texture = _atlas_tile_texture(PLAYER_SIDE_TILE)
+	_update_direction_texture()
 	for action: String in ACTIONS:
 		if not InputMap.has_action(action):
 			InputMap.add_action(action)
@@ -43,10 +51,28 @@ func _physics_process(_delta: float) -> void:
 			facing = Vector2i(signi(dir.x), 0)
 		else:
 			facing = Vector2i(0, signi(dir.y))
-		sprite.flip_h = facing.x < 0
+		_update_direction_texture()
 	else:
 		_walk_phase = 0.0
 		sprite.position = _sprite_base_position
+
+
+func _update_direction_texture() -> void:
+	if facing.x != 0:
+		sprite.texture = _side_texture
+		sprite.flip_h = facing.x < 0
+	else:
+		# Tiny Farm 当前只提供正面/侧面农夫图；向上先复用正面图，
+		# 保留独立入口，后续补正式背面帧时不需要改移动逻辑。
+		sprite.texture = _front_texture
+		sprite.flip_h = false
+
+
+func _atlas_tile_texture(idx: int) -> AtlasTexture:
+	var texture := AtlasTexture.new()
+	texture.atlas = load(FARM_TEX)
+	texture.region = Rect2((idx % 12) * 16, (idx / 12) * 16, 16, 16)
+	return texture
 
 
 func _unhandled_input(event: InputEvent) -> void:
