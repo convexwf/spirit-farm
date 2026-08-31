@@ -3,6 +3,8 @@ extends CharacterBody2D
 const SPEED := 90.0
 
 var facing := Vector2i.DOWN
+var _walk_phase := 0.0
+var _sprite_base_position := Vector2.ZERO
 
 @onready var sprite: Sprite2D = $Sprite2D
 @onready var farm_map: FarmMap = get_node("../FarmMap")
@@ -20,6 +22,7 @@ const ACTIONS := {
 
 
 func _ready() -> void:
+	_sprite_base_position = sprite.position
 	for action: String in ACTIONS:
 		if not InputMap.has_action(action):
 			InputMap.add_action(action)
@@ -34,11 +37,16 @@ func _physics_process(_delta: float) -> void:
 	velocity = dir * SPEED
 	move_and_slide()
 	if dir != Vector2.ZERO:
+		_walk_phase += _delta * 10.0
+		sprite.position = _sprite_base_position + Vector2(0, -absf(sin(_walk_phase)))
 		if absf(dir.x) >= absf(dir.y):
 			facing = Vector2i(signi(dir.x), 0)
 		else:
 			facing = Vector2i(0, signi(dir.y))
 		sprite.flip_h = facing.x < 0
+	else:
+		_walk_phase = 0.0
+		sprite.position = _sprite_base_position
 
 
 func _unhandled_input(event: InputEvent) -> void:

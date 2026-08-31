@@ -10,20 +10,21 @@ extends Node2D
 signal notice(message: String)
 
 const TOWN_TEX := "res://assets/kenney/tiny-town/Tilemap/tilemap_packed.png"
+const FARM_TEX := "res://assets/kenney/tiny-farm/Tilemap/tilemap_packed.png"
 
 # --- 瓦片编号（Tiny Town） ---
-const GRASS := [0, 1, 2]
+const GRASS := [0]
+const GRASS_DECOR := [1, 2]
 const PATH_C := 25
-const WATER := 61
-const WATER_EDGE := 49
-const TREES := [4, 6, 8, 17, 18, 30, 31, 32]
-const BUSH := 7
+const WATER := 61 # 仅用于占位和碰撞，实际水面由 WorldVisuals 绘制
+const TREES := [4, 15, 16, 27, 28]
+const BUSH := 17
 const FLOWER := 29
 
-# 耕地暂用 Tiny Town 的泥土瓦片（视觉安全）；Tiny Farm 的土壤瓦片
-# 确认编号后可以替换：const SOIL := 33 之类。
-const SOIL := 40
-const SOIL_VARIANTS := [39, 40, 41, 42]
+# 耕地使用 Tiny Farm 的土壤瓦片；Town 图集没有水面地形。
+const FARM_SOURCE_ID := 1
+const SOIL := 49
+const SOIL_VARIANTS := [0, 1, 36, 37]
 
 const CROP_TEXTS := [
 	"res://assets/sprites/crops/crop_stage_0.png",
@@ -66,13 +67,19 @@ var crops := {}
 var droplets := {}
 
 var _ground_layer: TileMapLayer
+var _visual_layer: WorldVisuals
 var _detail_layer: TileMapLayer
+var _water_tiles: Array[Vector2i] = []
 
 
 func _ready() -> void:
 	_ground_layer = TileMapLayer.new()
 	_ground_layer.name = "Ground"
 	add_child(_ground_layer)
+
+	_visual_layer = WorldVisuals.new()
+	_visual_layer.name = "WorldVisuals"
+	add_child(_visual_layer)
 
 	_detail_layer = TileMapLayer.new()
 	_detail_layer.name = "Details"
@@ -82,6 +89,7 @@ func _ready() -> void:
 	_ground_layer.tile_set = _build_ground_tileset()
 	_detail_layer.tile_set = _build_detail_tileset()
 	_build_map()
+	_visual_layer.set_water_tiles(_water_tiles)
 
 	GameState.day_changed.connect(_on_day_changed)
 
@@ -95,7 +103,7 @@ func front_tile(from_global: Vector2, facing: Vector2i) -> Vector2i:
 func hoe(tile: Vector2i) -> void:
 	match ground.get(tile, ""):
 		"grass":
-			_set_tile(tile, SOIL_VARIANTS[randi() % SOIL_VARIANTS.size()], "soil")
+			_set_tile(tile, SOIL_VARIANTS[randi() % SOIL_VARIANTS.size()], "soil", FARM_SOURCE_ID)
 			notice.emit("锄地完成，可以播种了")
 		"soil", "watered":
 			notice.emit("这里已经开垦过了")
@@ -170,9 +178,9 @@ func _build_ground_tileset() -> TileSet:
 	ts.add_physics_layer()
 	ts.set_physics_layer_collision_layer(0, 1)
 	ts.set_physics_layer_collision_mask(0, 1)
-	var src := _add_town_source(ts)
-	for t in [WATER, WATER_EDGE]:
-		_block_tile(src, t)
+	var town_src := _add_atlas_source(ts, TOWN_TEX, 0)
+	_add_atlas_source(ts, FARM_TEX, FARM_SOURCE_ID)
+	_block_tile(town_src, WATER)
 	return ts
 
 
@@ -182,19 +190,19 @@ func _build_detail_tileset() -> TileSet:
 	ts.add_physics_layer()
 	ts.set_physics_layer_collision_layer(0, 1)
 	ts.set_physics_layer_collision_mask(0, 1)
-	var src := _add_town_source(ts)
+	var src := _add_atlas_source(ts, TOWN_TEX, 0)
 	for t in TREES:
 		_block_tile(src, t)
 	return ts
 
 
-func _add_town_source(ts: TileSet) -> TileSetAtlasSource:
+func _add_atlas_source(ts: TileSet, texture_path: String, source_id: int) -> TileSetAtlasSource:
 	var src := TileSetAtlasSource.new()
-	src.texture = load(TOWN_TEX)
+	src.texture = load(texture_path)
 	src.texture_region_size = Vector2i(16, 16)
 	for i in range(132):
 		src.create_tile(Vector2i(i % 12, i / 12))
-	ts.add_source(src)
+	ts.add_source(src, source_id)
 	return src
 
 
@@ -216,14 +224,16 @@ func _build_map() -> void:
 				"T":
 					_set_grass(tile)
 					_set_detail(tile, TREES[y % TREES.size()])
+					_visual_layer.add_tree_shadow(tile)
 				"g":
 					_set_grass(tile)
 				"p":
 					_set_tile(tile, PATH_C, "path")
 				"w":
 					_set_tile(tile, WATER, "water")
+					_water_tiles.append(tile)
 				"s":
-					_set_tile(tile, SOIL, "soil")
+					_set_tile(tile, SOIL, "soil", FARM_SOURCE_ID)
 				"F":
 					_set_grass(tile)
 					_set_detail(tile, FLOWER)
@@ -233,13 +243,15 @@ func _build_map() -> void:
 
 
 func _set_grass(tile: Vector2i) -> void:
-	_set_tile(tile, GRASS[randi() % GRASS.size()], "grass")
+	_set_tile(tile, GRASS[0], "grass")
+	if randf() < 0.12:
+		_set_detail(tile, GRASS_DECOR[randi() % GRASS_DECOR.size()])
 
 
 func _set_detail(tile: Vector2i, idx: int) -> void:
 	_detail_layer.set_cell(tile, 0, Vector2i(idx % 12, idx / 12))
 
 
-func _set_tile(tile: Vector2i, idx: int, state: String) -> void:
-	_ground_layer.set_cell(tile, 0, Vector2i(idx % 12, idx / 12))
+func _set_tile(tile: Vector2i, idx: int, state: String, source_id: int = 0) -> void:
+	_ground_layer.set_cell(tile, source_id, Vector2i(idx % 12, idx / 12))
 	ground[tile] = state
